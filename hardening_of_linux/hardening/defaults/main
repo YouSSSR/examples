@@ -1,0 +1,3 @@
+motd: |
+   Тут работают программисты и девопсы!
+   server: {{ inventory_hostname }}
