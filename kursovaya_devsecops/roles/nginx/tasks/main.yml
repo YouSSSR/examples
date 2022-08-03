@@ -1,0 +1,98 @@
+- name: ensure host config dirs
+  file:
+    path: "{{ nginx_host_config_path }}/{{ item }}"
+    state: directory
+    owner: root
+    group: root
+    mode: 0750
+  with_items:
+  - ssl
+  - conf.d
+
+- name: ensure host dirs
+  file:
+    path: "{{ item }}"
+    state: directory
+    owner: nobody
+    group: nogroup
+    mode: 0777
+  with_items:
+  - "{{ nginx_host_config_path }}/prometheus"
+  - /var/log/nginx
+
+- name: ensure nginx main config
+  notify: reload service nginx
+  copy:
+    dest: "{{ nginx_host_config_path }}/nginx.conf"
+    content: "{{ nginx_main_config | default(lookup('file', 'nginx.conf')) }}"
+    owner: root
+    group: root
+    mode: 0754
+
+- name: ensure nginx configs
+  notify: reload service nginx
+  copy:
+    dest: "{{ nginx_host_config_path }}/conf.d/{{ item.name }}"
+    content: "{{ item.value }}"
+    owner: root
+    group: root
+    mode: 0750
+  with_items: "{{ nginx_configs }}"
+
+- name: get files in conf.d dir
+  shell: ls -1 {{ nginx_host_config_path }}/conf.d
+  register: confd_existing_files
+  changed_when: false
+
+- name: get config names
+  set_fact:
+    confd_files: "{% set list=[] %}{% for config in nginx_configs %}{{ list.append(config.name) }}{% endfor %}{{ list }}"
+
+- name: remove unmanaged configs
+  file:
+    path: "{{ nginx_host_config_path }}/conf.d/{{ item }}"
+    state: absent
+  with_items: "{{ confd_existing_files.stdout_lines }}"
+  when: item not in confd_files
+  notify: reload service nginx
+
+- name: ensure systemd nginx.service
+  notify: restart service nginx
+  copy:
+    dest: /etc/systemd/system/{{ nginx_service_name }}.service
+    mode: 0644
+    content: |
+      [Unit]
+      Requires=docker.service
+      After=docker.service
+      StartLimitIntervalSec=0
+      [Service]
+      ExecStartPre=-/usr/bin/docker rm --force %N
+      ExecStart=/usr/bin/docker run \
+        --name=%N \
+        --rm=true \
+        --pid=host \
+        --network=host \
+        --stop-timeout=300 \
+        --label=co.elastic.logs/enabled=true \
+        --volume {{ nginx_host_config_path }}/ssl:{{ nginx_docker_config_path }}/ssl:ro \
+        --volume {{ nginx_host_config_path }}/conf.d:{{ nginx_docker_config_path }}/conf.d:ro \
+        --volume {{ nginx_host_config_path }}/nginx.conf:{{ nginx_docker_config_path }}/nginx.conf:ro \
+        --volume /var/www:/var/www \
+      {% if nginx_with_prometheus %}
+        --volume {{ nginx_host_config_path }}/prometheus:{{ nginx_docker_config_path }}/prometheus:rw \
+      {% endif %}
+      {% if nginx_additional_mountpoints is defined %}
+      {% for mountpoint in nginx_additional_mountpoints %}
+        --volume {{ mountpoint }} \
+      {% endfor %}
+      {% endif %}
+        --volume /var/log/nginx:/var/log/nginx:rw \
+        {{ nginx_docker_repo }}:{{ nginx_docker_image_tag }}
+      ExecStop=-/usr/bin/docker stop %N    
+      ExecReload=/usr/bin/docker exec %N nginx -s reload
+      Restart=always
+      RestartSec=10
+      KillMode=process
+      [Install]
+      WantedBy=multi-user.target

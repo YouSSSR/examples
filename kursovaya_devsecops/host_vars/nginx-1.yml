@@ -1,0 +1,15 @@
+---
+nginx_configs:
+   - name: mywebsite.conf
+     value: |
+       upstream backend {
+         server 192.168.56.22:80;
+         server 192.168.56.23:80;
+       }
+       server {
+         listen 80;
+         server_name nginx-1.local;
+         location / {
+           proxy_pass http://backend;
+         }
+       }

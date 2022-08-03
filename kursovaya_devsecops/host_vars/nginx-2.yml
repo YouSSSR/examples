@@ -1,0 +1,16 @@
+---
+nginx_configs:
+  - name: mywebsite.conf
+    value: |                                              
+      server {                                            
+        listen 80;
+        location /cat/ {                          
+          alias /var/www/mywebsite/base/catalog/;         
+          access_log off;                                 
+        }
+        location / {
+                root /var/www/mywebsite/;
+                access_log off;
+        }
+
+      }

