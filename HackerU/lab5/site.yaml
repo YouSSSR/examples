@@ -1,0 +1,7 @@
+- name: ensure docker
+  become: true
+  hosts: all
+  gather_facts: yes
+  roles:
+  - docker
+  - hardening
