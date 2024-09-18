@@ -1,3 +1,0 @@
----
-- name: apply sysctl.conf
-  shell: sysctl -p
